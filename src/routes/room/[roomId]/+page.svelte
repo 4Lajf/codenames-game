@@ -20,6 +20,7 @@
 	export let data;
 
 	const roomId = $page.params.roomId;
+	let roomEventSubscription;
 	let showAuthModal = true;
 	let gameStarted = false;
 	let gameLoading = true;
@@ -127,7 +128,7 @@
 				});
 
 			// Subscribe to room-wide reset events
-			const roomEventSubscription = supabase
+			roomEventSubscription = supabase
 				.channel(`room_events:${roomId}`)
 				.on(
 					'postgres_changes',

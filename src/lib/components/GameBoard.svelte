@@ -88,11 +88,6 @@
 				return;
 			}
 
-			if ($gameStore.cards[index].revealed) {
-				toast.error('This card has already been revealed!');
-				return;
-			}
-
 			loading = true;
 			try {
 				const { data: room, error: roomError } = await supabase
@@ -105,40 +100,60 @@
 
 				const currentGameState = room.game_state;
 
-				if (currentGameState.currentTurn !== currentTeam) {
-					toast.error("It's not your team's turn!");
-					return;
-				}
-
-				if (currentGameState.cards[index].revealed) {
-					toast.error('This card has already been revealed!');
+				// More strict guess validation
+				if (
+					!currentGameState.canGuess ||
+					currentGameState.currentTurn !== currentTeam ||
+					currentGameState.guessesRemaining <= 0
+				) {
+					toast.error('Cannot make a guess right now');
+					loading = false;
 					return;
 				}
 
 				const card = currentGameState.cards[index];
+
+				if (card.revealed) {
+					toast.error('This card has already been revealed');
+					loading = false;
+					return;
+				}
+
 				card.revealed = true;
 
+				// Decrement guesses remaining for non-special clues
+				if (currentGameState.clueType !== 'special') {
+					currentGameState.guessesRemaining--;
+				}
+
+				// Logic for determining game state after guess
 				if (card.color === 'black') {
 					currentGameState.gameOver = true;
 					currentGameState.winner = currentGameState.currentTurn === 'red' ? 'blue' : 'red';
 					currentGameState.canGuess = false;
-				} else if (card.color === 'red' || card.color === 'blue' || card.color === 'neutral') {
-					if (card.color !== currentGameState.currentTurn) {
-						currentGameState.currentTurn = currentGameState.currentTurn === 'red' ? 'blue' : 'red';
-						currentGameState.canGuess = false;
-						currentGameState.guessesRemaining = 0;
-						currentGameState.currentClue = null;
-					}
+				} else if (card.color !== currentGameState.currentTurn) {
+					// Wrong color, end turn
+					currentGameState.currentTurn = currentGameState.currentTurn === 'red' ? 'blue' : 'red';
+					currentGameState.canGuess = false;
+					currentGameState.guessesRemaining = 0;
+					currentGameState.currentClue = null;
 				}
 
-				if (card.color === 'red') {
-					currentGameState.redCardsLeft--;
-				} else if (card.color === 'blue') {
-					currentGameState.blueCardsLeft--;
+				// Team-specific card reduction
+				if (card.color === 'red') currentGameState.redCardsLeft--;
+				if (card.color === 'blue') currentGameState.blueCardsLeft--;
+
+				// Check if guesses are exhausted
+				if (currentGameState.guessesRemaining <= 0 && currentGameState.clueType !== 'special') {
+					currentGameState.currentTurn = currentGameState.currentTurn === 'red' ? 'blue' : 'red';
+					currentGameState.canGuess = false;
+					currentGameState.currentClue = null;
 				}
 
+				// Existing game end check
 				await checkGameEnd(currentGameState);
 
+				// Update database
 				const { error: updateError } = await supabase
 					.from('rooms')
 					.update({ game_state: currentGameState })
@@ -146,6 +161,7 @@
 
 				if (updateError) throw updateError;
 
+				// Add guess to history
 				await supabase.from('game_history').insert({
 					room_id: roomId,
 					action_type: 'guess',

@@ -249,30 +249,31 @@ function createGameStore() {
     setClue: async (roomId, clue, number) => {
       try {
         let currentState;
-        // Get current state from the store
         gameStore.subscribe(state => {
           currentState = state;
-        })();  // Call immediately and unsubscribe
+        })();
 
         // Special handling for 0, 1, and Infinity clues
         let guessesAllowed;
         let displayNumber;
+        let clueType = 'normal';
 
         if (number === 0) {
           guessesAllowed = Infinity;
           displayNumber = 0;
+          clueType = 'special';
         } else if (number === 1) {
           guessesAllowed = 2; // 1 + 1 additional guess
           displayNumber = 1;
         } else if (number === Infinity) {
           guessesAllowed = Infinity;
           displayNumber = Infinity;
+          clueType = 'special';
         } else {
-          guessesAllowed = number + 1;
+          guessesAllowed = number + 1; // Allow one more guess than number
           displayNumber = number;
         }
 
-        // Update database first
         const { data, error } = await supabase
           .from('rooms')
           .update({
@@ -280,12 +281,11 @@ function createGameStore() {
               ...currentState,
               currentClue: {
                 text: clue,
-                number: displayNumber // Store the original number for display
+                number: displayNumber
               },
-              guessesRemaining: guessesAllowed, // Store calculated guesses
+              guessesRemaining: guessesAllowed,
               canGuess: true,
-              // Add a flag to distinguish clue type
-              clueType: number === 0 || number === Infinity ? 'special' : 'normal'
+              clueType: clueType
             }
           })
           .eq('id', roomId)
@@ -294,10 +294,8 @@ function createGameStore() {
 
         if (error) throw error;
 
-        // Only update local state after successful database update
         set(deserializeGameState(data.game_state));
 
-        // Add to history with original number
         await addToHistory(roomId, {
           type: 'clue',
           data: {
