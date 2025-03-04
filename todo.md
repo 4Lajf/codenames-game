@@ -11,3 +11,5 @@ Make the timer able to pause/resume by clicking it
 add configuration to the room creation to supply a custom timer duration in seconds
 Also clicking on the timer should pause it for everybody and display the same message.
 Synchronize the timer in 10 second intervals between clients.
+
+Make the gamelog reactive to changes in the database, when the history is deleted from the DB this does not reflect on the client-side
